@@ -1,0 +1,380 @@
+
+
+Symmetric EVPN IRB
+Topology: 
+
+
+Note :
+
+BGP, EVPN and VxLAN related articles are available in here, Routing (BGP) , EVPN & VxLAN.
+ 
+
+Procedure:
+Step 1. Setup VLAN 10 & VLAN 30 on SONiC01 and VLAN 20 & VLAN 30 on SONiC02. Bind the VLAN members as topology on both switches. Please refer to VLAN & Inter-VLAN Routing article.
+
+Step 2. Configure IP address for uplink port of both switches.
+
+SONiC01
+
+admin@SONIC01:~$ sudo config interface ip add Ethernet48 10.0.0.4/31
+SONiC02
+
+admin@SONIC02:~$ sudo config interface ip add Ethernet52 10.0.0.5/31
+Step 3: Configure IP address to Loopback0 of both switches.
+
+SONiC01
+
+admin@SONIC01:~$ sudo config interface ip add Loopback0 1.1.1.1/32
+SONiC02
+
+admin@SONIC02:~$ sudo config interface ip add Loopback0 2.2.2.2/32
+Step 4. Configure VRF Setting
+
+SONiC01
+
+admin@SONIC01:~$ sudo config vrf add Vrf01                                                            → reate VRF
+admin@SONIC01:~$ sudo config interface vrf bind Vlan30 Vrf01                                          → bind Vlan30 to Vrf01
+admin@SONIC01:~$ sudo config interface vrf bind Vlan10 Vrf01                                          → bind Vlan10 to Vrf01
+admin@SONIC01:~$ sudo config interface ip add Vlan10 192.168.1.254/24                                 → Configure IP address on Vlan10
+SONiC02
+
+admin@SONIC02:~$ sudo config vrf add Vrf01                                                             → create VRF
+admin@SONIC02:~$ sudo config interface vrf bind Vlan30 Vrf01                                           → bind Vlan30 to Vrf01
+admin@SONIC02:~$ sudo config interface vrf bind Vlan20 Vrf01                                           → bind Vlan20 to Vrf01
+admin@SONIC02:~$ sudo config interface ip add Vlan20 192.168.2.254/24                                  → Configure IP address on Vlan20
+Notice. Please bind VRF before associating the IP address with the VLAN interface. (Detail can refer Enterprise-SONiC-VRF-Virtual-routing-and-forwarding)
+
+Step 5. Create VxLAN
+
+SONiC01
+
+admin@SONIC01:~$ sudo config vxlan add vtep 1.1.1.1                                                    → configuring VTEP_name (vtep) and its IP address 
+admin@SONIC01:~$ sudo config vxlan evpn_nvo add nvo vtep                                               → create nvo_name (nvo) and bind it to VTEP_name (vtep)
+admin@SONIC01:~$ sudo config vxlan map add vtep 10 1000                                                → mapping VNI 1000 to VLAN 10
+admin@SONIC01:~$ sudo config vxlan map add vtep 30 3000                                                → mapping VNI 3000 to VLAN 30
+admin@SONIC01:~$ sudo config save -y
+SONiC02
+
+admin@SONIC02:~$ sudo config vxlan add vtep 2.2.2.2                                                    → configuring VTEP_name (vtep) and its IP address 
+admin@SONIC02:~$ sudo config vxlan evpn_nvo add nvo vtep                                               → create nvo_name (nvo) and bind it to VTEP_name (vtep)
+admin@SONIC02:~$ sudo config vxlan map add vtep 20 2000                                                → mapping VNI 2000 to VLAN 20
+admin@SONIC02:~$ sudo config vxlan map add vtep 30 3000                                                → mapping VNI 3000 to VLAN 30
+admin@SONIC02:~$ sudo config save -y     
+Step 6. Set the layer3 VNI on both switches.
+
+SONiC01
+
+admin@SONIC01:~$ sudo config vrf add_vrf_vni_map Vrf01 3000                                            → map Vrf01 VNI 3000
+Step 7. Save configuration on both switches.
+
+Both Switches
+
+admin@SONIC01:~$ sudo config save -y
+Step 8. Establish BGP environment for EVPN. 
+
+SONiC01(VTYSH)
+
+admin@SONIC01:~$ vtysh                                                                                 
+Hello, this is FRRouting (version 7.2.1-sonic).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+sonic# configure terminal
+sonic(config)# router bgp 65100                                                                        
+sonic(config-router)# neighbor 10.0.0.5 remote-as 65100                                      
+sonic(config-router)# address-family ipv4 unicast                                       
+sonic(config-router-af)# network 1.1.1.1/32                                                 
+sonic(config-router-af)# exit
+sonic(config-router)# address-family l2vpn evpn                                          
+sonic(config-router-af)# neighbor 10.0.0.5 activate                                      
+sonic(config-router-af)# advertise-all-vni                                                      
+sonic(config-router-af)# end
+sonic# configure terminal                                                                          
+sonic(config)# vrf Vrf01                                                                    -> Mapping layer3 VNI and VRF in FRR                                                    
+sonic(config-vrf)# vni 3000                                                                 -> Mapping layer3 VNI and VRF in FRR           
+sonic(config-vrf)# end
+sonic# configure terminal 
+sonic(config)# router bgp 65100 vrf Vrf01                                                      
+sonic(config-router)# address-family ipv4 unicast                                        
+sonic(config-router-af)# redistribute connected                                           
+sonic(config-router-af)# exit
+sonic(config-router)# address-family l2vpn evpn                                          
+sonic(config-router-af)# advertise ipv4 unicast                                              
+sonic(config-router-af)# end
+sonic# write
+SONiC02(VTYSH)
+
+admin@SONIC02:~$ vtysh                                                                                 
+Hello, this is FRRouting (version 7.2.1-sonic).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+sonic# configure terminal
+sonic(config)# router bgp 65100                                                                   
+sonic(config-router)# neighbor 10.0.0.4 remote-as 65100             
+sonic(config-router)# address-family ipv4 unicast                                       
+sonic(config-router-af)# network 2.2.2.2/32                                                 
+sonic(config-router-af)# exit
+sonic(config-router)# address-family l2vpn evpn                                          
+sonic(config-router-af)# neighbor 10.0.0.4 activate                                      
+sonic(config-router-af)# advertise-all-vni                                                      
+sonic(config-router-af)# end
+sonic# configure terminal              
+sonic(config)# vrf Vrf01                                                                    → Mapping layer3 VNI and VRF in FRR                                                                                                     
+sonic(config-vrf)# vni 3000                                                                 → Mapping layer3 VNI and VRF in FRR                            
+sonic(config-vrf)# end
+sonic# configure terminal 
+sonic(config)# router bgp 65100 vrf Vrf01                                                     
+sonic(config-router)# address-family ipv4 unicast                                        
+sonic(config-router-af)# redistribute connected                                           
+sonic(config-router-af)# exit
+sonic(config-router)# address-family l2vpn evpn                                          
+sonic(config-router-af)# advertise ipv4 unicast                                              
+sonic(config-router-af)# end
+sonic# write
+Notice. In the 202111 branch, users don't need to configure the Layer 3 VNI mapping in FRR when the BGP container is ready. The configurations will be applied when the user runs Step 6 of the configuration. However, it's important to note that the configuration on FRR must be saved, or it will be lost after a reboot.
+
+Step 9. Check EVPN-VNI status. 
+
+SONiC01(VTYSH)
+
+sonic# show evpn vni detail
+VNI: 1000
+ Type: L2
+ Tenant VRF: Vrf01
+ VxLAN interface: vtep-10
+ VxLAN ifIndex: 67
+ SVI interface: Vlan10
+ SVI ifIndex: 9
+ Local VTEP IP: 1.1.1.1
+ Mcast group: 0.0.0.0
+ No remote VTEPs known for this VNI
+ Number of MACs (local and remote) known for this VNI: 1
+ Number of ARPs (IPv4 and IPv6, local and remote) known for this VNI: 1
+ Advertise-gw-macip: No
+ Advertise-svi-macip: No
+
+VNI: 3000
+  Type: L3
+  Tenant VRF: Vrf01
+  Local Vtep Ip: 1.1.1.1
+  Vxlan-Intf: vtep-30
+  SVI-If: Vlan30
+  State: Up
+  VNI Filter: none
+  System MAC: 00:a0:c9:00:00:00
+  Router MAC: 00:a0:c9:00:00:00
+  L2 VNIs: 1000
+SONiC02(VTYSH)
+
+sonic# show evpn vni detail
+VNI: 2000
+ Type: L2
+ Tenant VRF: Vrf01
+ VxLAN interface: vtep-20
+ VxLAN ifIndex: 78
+ SVI interface: Vlan20
+ SVI ifIndex: 76
+ Local VTEP IP: 2.2.2.2
+ Mcast group: 0.0.0.0
+ No remote VTEPs known for this VNI
+ Number of MACs (local and remote) known for this VNI: 1
+ Number of ARPs (IPv4 and IPv6, local and remote) known for this VNI: 1
+ Advertise-gw-macip: No
+ Advertise-svi-macip: No
+
+VNI: 3000
+  Type: L3
+  Tenant VRF: Vrf01
+  Local Vtep Ip: 2.2.2.2
+  Vxlan-Intf: vtep-30
+  SVI-If: Vlan30
+  State: Up
+  VNI Filter: none
+  System MAC: 68:21:5f:29:c0:d2
+  Router MAC: 68:21:5f:29:c0:d2
+  L2 VNIs: 2000
+Step 10. Check BGP session status. 
+
+SONiC01(VTYSH)
+
+sonic# show bgp summary
+
+IPv4 Unicast Summary (VRF default):
+BGP router identifier 188.188.9.14, local AS number 65100 vrf-id 0
+BGP table version 17
+RIB entries 3, using 552 bytes of memory
+Peers 1, using 723 KiB of memory
+
+Neighbor        V         AS   MsgRcvd   MsgSent   TblVer  InQ OutQ  Up/Down State/PfxRcd   PfxSnt Desc
+10.0.0.5        4      65100      1436      1449        0    0    0 03:02:18            1        1 N/A
+
+Total number of neighbors 1
+
+L2VPN EVPN Summary (VRF default):
+BGP router identifier 188.188.9.14, local AS number 65100 vrf-id 0
+BGP table version 0
+RIB entries 27, using 4968 bytes of memory
+Peers 1, using 723 KiB of memory
+
+Neighbor        V         AS   MsgRcvd   MsgSent   TblVer  InQ OutQ  Up/Down State/PfxRcd   PfxSnt Desc
+10.0.0.5        4      65100      1436      1449        0    0    0 03:02:18            4        4 N/A
+
+Total number of neighbors 1
+SONiC02(VTYSH)
+
+sonic# show bgp summary
+
+IPv4 Unicast Summary (VRF default):
+BGP router identifier 188.188.9.6, local AS number 65100 vrf-id 0
+BGP table version 8
+RIB entries 3, using 552 bytes of memory
+Peers 1, using 723 KiB of memory
+
+Neighbor        V         AS   MsgRcvd   MsgSent   TblVer  InQ OutQ  Up/Down State/PfxRcd   PfxSnt Desc
+10.0.0.4        4      65100       220       221        0    0    0 03:02:18            1        1 N/A
+
+Total number of neighbors 1
+
+L2VPN EVPN Summary (VRF default):
+BGP router identifier 188.188.9.6, local AS number 65100 vrf-id 0
+BGP table version 0
+RIB entries 11, using 2024 bytes of memory
+Peers 1, using 723 KiB of memory
+
+Neighbor        V         AS   MsgRcvd   MsgSent   TblVer  InQ OutQ  Up/Down State/PfxRcd   PfxSnt Desc
+10.0.0.4        4      65100       220       221        0    0    0 03:02:18            4        4 N/A
+
+Total number of neighbors 1
+Step 11. Check routing and EVPN learning.
+
+SONiC01(VTYSH)
+
+sonic# show ip route vrf all
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+VRF Vrf01:
+C>* 192.168.1.0/24 is directly connected, Vlan10, 03:18:41
+K>* 192.168.1.254/32 [0/0] is directly connected, Vlan10, 03:18:41
+B>* 192.168.2.0/24 [200/0] via 2.2.2.2, Vlan30 onlink, weight 1, 03:04:24
+B>* 192.168.2.2/32 [200/0] via 2.2.2.2, Vlan30 onlink, weight 1, 02:21:18
+
+VRF default:
+K>* 0.0.0.0/0 [0/202] via 188.188.1.1, eth0, 22:59:15
+K * 1.1.1.1/32 [0/0] is directly connected, Loopback0, 22:54:06
+C>* 1.1.1.1/32 is directly connected, Loopback0, 22:54:06
+B>* 2.2.2.2/32 [200/0] via 10.0.0.5, Ethernet48, weight 1, 03:04:24
+C>* 10.0.0.4/31 is directly connected, Ethernet48, 03:07:18
+K>* 10.0.0.4/32 [0/0] is directly connected, Ethernet48, 22:45:24
+C>* 188.188.0.0/16 is directly connected, eth0, 22:59:15
+
+
+sonic# show bgp l2vpn evpn
+BGP table version is 14, local router ID is 188.188.9.14
+Status codes: s suppressed, d damped, h history, * valid, > best, i - internal
+Origin codes: i - IGP, e - EGP, ? - incomplete
+EVPN type-1 prefix: [1]:[EthTag]:[ESI]:[IPlen]:[VTEP-IP]
+EVPN type-2 prefix: [2]:[EthTag]:[MAClen]:[MAC]:[IPlen]:[IP]
+EVPN type-3 prefix: [3]:[EthTag]:[IPlen]:[OrigIP]
+EVPN type-4 prefix: [4]:[ESI]:[IPlen]:[OrigIP]
+EVPN type-5 prefix: [5]:[EthTag]:[IPlen]:[IP]
+
+   Network          Next Hop            Metric LocPrf Weight Path
+Route Distinguisher: 188.188.9.6:2
+*>i[2]:[0]:[48]:[80:a2:35:5a:22:50]
+                    2.2.2.2                       100      0 i
+                    RT:65100:2000 ET:8
+*>i[2]:[0]:[48]:[80:a2:35:5a:22:50]:[32]:[192.168.2.2]
+                    2.2.2.2                       100      0 i
+                    RT:65100:2000 RT:65100:3000 ET:8 Rmac:68:21:5f:29:c0:d2
+*>i[3]:[0]:[32]:[2.2.2.2]
+                    2.2.2.2                       100      0 i
+                    RT:65100:2000 ET:8
+Route Distinguisher: 188.188.9.14:2
+*> [2]:[0]:[48]:[b8:6a:97:19:ba:12]
+                    1.1.1.1                            32768 i
+                    ET:8 RT:65100:1000
+*> [2]:[0]:[48]:[b8:6a:97:19:ba:12]:[32]:[192.168.1.1]
+                    1.1.1.1                            32768 i
+                    ET:8 RT:65100:1000 RT:65100:3000 Rmac:00:a0:c9:00:00:00
+*> [3]:[0]:[32]:[1.1.1.1]
+                    1.1.1.1                            32768 i
+                    ET:8 RT:65100:1000
+Route Distinguisher: 192.168.1.254:3
+*> [5]:[0]:[24]:[192.168.1.0]
+                    1.1.1.1                  0         32768 ?
+                    ET:8 RT:65100:3000 Rmac:00:a0:c9:00:00:00
+Route Distinguisher: 192.168.2.254:3
+*>i[5]:[0]:[24]:[192.168.2.0]
+                    2.2.2.2                  0    100      0 ?
+                    RT:65100:3000 ET:8 Rmac:68:21:5f:29:c0:d2
+
+Displayed 8 out of 8 total prefixes
+SONiC02(VTYSH)
+
+sonic# show ip route vrf all
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, F - PBR,
+       f - OpenFabric,
+       > - selected route, * - FIB route, q - queued, r - rejected, b - backup
+       t - trapped, o - offload failure
+
+VRF Vrf01:
+B>* 192.168.1.0/24 [200/0] via 1.1.1.1, Vlan30 onlink, weight 1, 03:04:23
+B>* 192.168.1.1/32 [200/0] via 1.1.1.1, Vlan30 onlink, weight 1, 02:20:51
+C>* 192.168.2.0/24 is directly connected, Vlan20, 03:07:28
+K>* 192.168.2.254/32 [0/0] is directly connected, Vlan20, 03:07:28
+
+VRF default:
+K>* 0.0.0.0/0 [0/202] via 188.188.1.1, eth0, 03:17:24
+B>* 1.1.1.1/32 [200/0] via 10.0.0.4, Ethernet52, weight 1, 03:04:23
+K * 2.2.2.2/32 [0/0] is directly connected, Loopback0, 03:07:29
+C>* 2.2.2.2/32 is directly connected, Loopback0, 03:07:29
+C>* 10.0.0.4/31 is directly connected, Ethernet52, 03:07:17
+K>* 10.0.0.5/32 [0/0] is directly connected, Ethernet52, 03:07:18
+C>* 188.188.0.0/16 is directly connected, eth0, 03:17:24
+
+
+sonic# show bgp l2vpn evpn
+BGP table version is 12, local router ID is 188.188.9.6
+Status codes: s suppressed, d damped, h history, * valid, > best, i - internal
+Origin codes: i - IGP, e - EGP, ? - incomplete
+EVPN type-1 prefix: [1]:[EthTag]:[ESI]:[IPlen]:[VTEP-IP]
+EVPN type-2 prefix: [2]:[EthTag]:[MAClen]:[MAC]:[IPlen]:[IP]
+EVPN type-3 prefix: [3]:[EthTag]:[IPlen]:[OrigIP]
+EVPN type-4 prefix: [4]:[ESI]:[IPlen]:[OrigIP]
+EVPN type-5 prefix: [5]:[EthTag]:[IPlen]:[IP]
+
+   Network          Next Hop            Metric LocPrf Weight Path
+Route Distinguisher: 188.188.9.6:2
+*> [2]:[0]:[48]:[80:a2:35:5a:22:50]
+                    2.2.2.2                            32768 i
+                    ET:8 RT:65100:2000
+*> [2]:[0]:[48]:[80:a2:35:5a:22:50]:[32]:[192.168.2.2]
+                    2.2.2.2                            32768 i
+                    ET:8 RT:65100:2000 RT:65100:3000 Rmac:68:21:5f:29:c0:d2
+*> [3]:[0]:[32]:[2.2.2.2]
+                    2.2.2.2                            32768 i
+                    ET:8 RT:65100:2000
+Route Distinguisher: 188.188.9.14:2
+*>i[2]:[0]:[48]:[b8:6a:97:19:ba:12]
+                    1.1.1.1                       100      0 i
+                    RT:65100:1000 ET:8
+*>i[2]:[0]:[48]:[b8:6a:97:19:ba:12]:[32]:[192.168.1.1]
+                    1.1.1.1                       100      0 i
+                    RT:65100:1000 RT:65100:3000 ET:8 Rmac:00:a0:c9:00:00:00
+*>i[3]:[0]:[32]:[1.1.1.1]
+                    1.1.1.1                       100      0 i
+                    RT:65100:1000 ET:8
+Route Distinguisher: 192.168.1.254:3
+*>i[5]:[0]:[24]:[192.168.1.0]
+                    1.1.1.1                  0    100      0 ?
+                    RT:65100:3000 ET:8 Rmac:00:a0:c9:00:00:00
+Route Distinguisher: 192.168.2.254:3
+*> [5]:[0]:[24]:[192.168.2.0]
+                    2.2.2.2                  0         32768 ?
+                    ET:8 RT:65100:3000 Rmac:68:21:5f:29:c0:d2
+
+Displayed 8 out of 8 total prefixes
