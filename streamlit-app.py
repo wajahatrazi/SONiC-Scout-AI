@@ -1,7 +1,7 @@
 import os
 import openai
 import streamlit as st
-from dotenv import find_dotenv, load_dotenv
+#from dotenv import find_dotenv, load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
@@ -11,10 +11,13 @@ from datetime import datetime
 import logging
  
 # Load environment variables
-dotenv_path = find_dotenv()
-load_dotenv(dotenv_path)
-openai_api_key = os.getenv("OPENAI_API_KEY")
-openai.api_key = openai_api_key
+#dotenv_path = find_dotenv()
+#load_dotenv(dotenv_path)
+#openai_api_key = os.getenv("OPENAI_API_KEY")
+#openai.api_key = openai_api_key
+
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
  
 # Initialize logging for error tracking
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,12 +33,12 @@ def load_vector_store():
         st.error("There was an issue loading the knowledge base.")
         return None
  
-# Initialize vector store and language model
+
 vector_store = load_vector_store()
 sonic_model = ChatOpenAI(model="gpt-4o", temperature=0.5)
  
  
-# Define an improved prompt template for context-based responses
+# Prompt template for context-based responses
 prompt_template = """
 You are SONiC Scout, a knowledgeable, friendly, and supportive assistant for both SONiC Network Engineers and newcomers. When responding to user queries, ensure the following:
 1. Provide answers in a clear, structured, and easy-to-understand manner.
@@ -91,7 +94,7 @@ def get_sonic_scout_response(query):
         if not docs:
             return "I’m still learning, but I’m here to help as best I can!"
  
-        context = "\n".join([doc.page_content for doc in docs])[:2000]
+        context = "\n".join([doc.page_content for doc in docs])
         response = qa_chain.invoke({"query": query, "context": context})
  
         # Extract only the answer section from the response
