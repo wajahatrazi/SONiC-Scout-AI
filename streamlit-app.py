@@ -16,7 +16,7 @@ import logging
 #openai_api_key = os.getenv("OPENAI_API_KEY")
 #openai.api_key = openai_api_key
 
-openai_api_key = st.secrets["OPENAI_API_KEY"]
+openai_api_key = st.secrets["openai_api_key"]
 openai.api_key = openai_api_key
 
  
