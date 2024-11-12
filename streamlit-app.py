@@ -9,7 +9,7 @@ from langchain.chains import RetrievalQA
 from datetime import datetime
 import logging
  
-openai_api_key = st.secrets["openai"]["OPENAI_API_KEY"]
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 openai.api_key = openai_api_key
 
  
