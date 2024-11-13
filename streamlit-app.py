@@ -110,8 +110,7 @@ def get_sonic_scout_response(query):
         return "I’m experiencing a technical issue right now."
  
  
- 
- 
+
 st.set_page_config(
     page_title="SONiC Scout",
     page_icon="assets/sonic_logo.png",  # Path to the SONiC logo
